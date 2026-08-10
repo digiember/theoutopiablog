@@ -46,6 +46,9 @@ def _inline(text):
 
     text = re.sub(r"`([^`]+)`", keep, text)
     text = html.escape(text, quote=False)
+    text = re.sub(r"!\[\[([^\]]+)\]\]",
+                  lambda m: '<img src="/%s" alt="">' % m.group(1).split("|")[0].strip(),
+                  text)                       # Obsidian 的 ![[图片.png]]
     text = re.sub(r"!\[([^\]]*)\]\(([^)]+)\)",
                   r'<img src="\2" alt="\1">', text)
     text = re.sub(r"\[([^\]]+)\]\(([^)]+)\)",
@@ -155,11 +158,22 @@ class Post:
         # 头部：连续的 key: value，遇到空行结束
         head_lines = []
         rest = raw.split("\n")
-        while rest and re.match(r"^[A-Za-z_]+\s*:", rest[0]):
-            head_lines.append(rest.pop(0))
+        if rest and rest[0].strip() == "---":
+            # Obsidian 那种用 --- 包起来的写法
+            rest.pop(0)
+            while rest and rest[0].strip() != "---":
+                head_lines.append(rest.pop(0))
+            if rest:
+                rest.pop(0)
+        else:
+            # 不加 --- 的写法，一样认
+            while rest and re.match(r"^[A-Za-z_]+\s*:", rest[0]):
+                head_lines.append(rest.pop(0))
         for l in head_lines:
+            if ":" not in l:
+                continue          # 跳过 tags 下面那种缩进的列表行
             k, v = l.split(":", 1)
-            meta[k.strip().lower()] = v.strip()
+            meta[k.strip().lower()] = v.strip().strip("\"'")
         body = "\n".join(rest).strip()
 
         name = os.path.splitext(os.path.basename(path))[0]
